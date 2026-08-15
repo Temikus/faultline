@@ -1,0 +1,118 @@
+# Publishes the image to GHCR in three forms, because they answer three
+# different questions:
+#
+#   latest, 0.1.0                    what version of the server is this
+#   blue-stable, green-broken, …     what does this workload do
+#   0.1.0-green-broken, …            both, pinned, for a test that must not
+#                                    change underneath it
+#
+# The moving profile tags are the ones a demo or a test environment points at;
+# the pinned ones are what you use when a result has to be reproducible a year
+# from now.
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, e.g. 0.1.0"
+        required: true
+        default: "0.1.0"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      # One profile failing should not leave the rest unpublished: a partial set
+      # is a test environment that breaks halfway through a scenario.
+      fail-fast: false
+      matrix:
+        include:
+          # The plain image: no faults by default, configured at run time.
+          - profile: plain
+            fail_rate: "0.0"
+            latency_ms: "0"
+          # The incumbent in a blue/green pair. Healthy, and slightly faster
+          # than green-stable so the two are distinguishable in a latency graph.
+          - profile: blue-stable
+            fail_rate: "0.0"
+            latency_ms: "10"
+          # A candidate that is fine. Promoting this should succeed.
+          - profile: green-stable
+            fail_rate: "0.0"
+            latency_ms: "12"
+          # A candidate that is marginal: enough failures to notice, not enough
+          # to be sure about from a small sample. This is the interesting one —
+          # it is where a decision procedure has to admit it does not know.
+          - profile: green-flaky
+            fail_rate: "0.075"
+            latency_ms: "55"
+          # A candidate that is unambiguously bad.
+          - profile: green-broken
+            fail_rate: "0.35"
+            latency_ms: "15"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the image name and its tags
+        env:
+          # Through the environment rather than inline, so a value can never be
+          # read as shell.
+          OWNER: ${{ github.repository_owner }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+
+          # An image repository must be lowercase; an owner login need not be.
+          image="ghcr.io/${OWNER,,}/faultline"
+
+          if [ "$REF_TYPE" = tag ]; then
+            version="${REF_NAME#v}"
+          else
+            version="$INPUT_VERSION"
+          fi
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::version must look like 1.2.3, got '$version'"; exit 1 ;;
+          esac
+
+          {
+            echo "TAGS<<TAGS_EOF"
+            if [ "$PROFILE" = plain ]; then
+              printf '%s\n' "$image:latest" "$image:$version"
+            else
+              printf '%s\n' "$image:$PROFILE" "$image:$version-$PROFILE"
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.TAGS }}
+          build-args: |
+            FAIL_RATE=${{ matrix.fail_rate }}
+            LATENCY_MS=${{ matrix.latency_ms }}
+          # Links the package to this repository, which is what lets the
+          # package inherit its settings and show its source.
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=HTTP server that fails on purpose (${{ matrix.profile }}: FAIL_RATE=${{ matrix.fail_rate }}, LATENCY_MS=${{ matrix.latency_ms }})
+            org.opencontainers.image.licenses=Apache-2.0
