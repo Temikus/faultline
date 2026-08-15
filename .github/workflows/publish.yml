@@ -1,14 +1,18 @@
-# Publishes the image to GHCR in three forms, because they answer three
-# different questions:
+# Publishes the image to GHCR under tags that answer different questions:
 #
 #   latest, 0.1.0                    what version of the server is this
-#   blue-stable, green-broken, …     what does this workload do
-#   0.1.0-green-broken, …            both, pinned, for a test that must not
+#   broken, flaky, slow, stable      what does this workload do
+#   blue-stable, green-broken, …     what does it do, and which side of a
+#                                    blue/green pair is it
+#   0.1.0-broken, 0.1.0-green-broken both, pinned, for a test that must not
 #                                    change underneath it
 #
-# The moving profile tags are the ones a demo or a test environment points at;
-# the pinned ones are what you use when a result has to be reproducible a year
-# from now.
+# The bare behaviour names always mean the green build — green is the candidate,
+# which is what a test is usually pointing at. blue-stable keeps its prefix
+# because its entire job is being the other one.
+#
+# Moving tags are what a demo points at; the version-qualified ones are what you
+# use when a result has to be reproducible a year from now.
 name: publish
 
 on:
@@ -34,27 +38,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `alias` is the bare behaviour name, published alongside the
+          # profile. Only the green builds carry one — see the header.
+          #
           # The plain image: no faults by default, configured at run time.
           - profile: plain
+            alias: ""
             fail_rate: "0.0"
             latency_ms: "0"
           # The incumbent in a blue/green pair. Healthy, and slightly faster
           # than green-stable so the two are distinguishable in a latency graph.
           - profile: blue-stable
+            alias: ""
             fail_rate: "0.0"
             latency_ms: "10"
           # A candidate that is fine. Promoting this should succeed.
           - profile: green-stable
+            alias: stable
             fail_rate: "0.0"
             latency_ms: "12"
           # A candidate that is marginal: enough failures to notice, not enough
           # to be sure about from a small sample. This is the interesting one —
           # it is where a decision procedure has to admit it does not know.
           - profile: green-flaky
+            alias: flaky
             fail_rate: "0.075"
             latency_ms: "55"
           # A candidate that is unambiguously bad.
           - profile: green-broken
+            alias: broken
             fail_rate: "0.35"
             latency_ms: "15"
           # A candidate that never fails and is simply too slow. Every other
@@ -63,6 +75,7 @@ jobs:
           # which is a different failure to detect and a different one to get
           # wrong.
           - profile: green-slow
+            alias: slow
             fail_rate: "0.0"
             latency_ms: "400"
     steps:
@@ -77,6 +90,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ inputs.version }}
           PROFILE: ${{ matrix.profile }}
+          ALIAS: ${{ matrix.alias }}
         run: |
           set -euo pipefail
 
@@ -100,6 +114,9 @@ jobs:
           {
             echo "TAGS<<TAGS_EOF"
             printf '%s\n' "$image:$PROFILE" "$image:$version-$PROFILE"
+            if [ -n "$ALIAS" ]; then
+              printf '%s\n' "$image:$ALIAS" "$image:$version-$ALIAS"
+            fi
             if [ "$PROFILE" = plain ]; then
               printf '%s\n' "$image:latest" "$image:$version"
             fi

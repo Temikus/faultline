@@ -38,14 +38,19 @@ making decisions from what it observes: fault config living in a manifest can
 silently contradict the image, and then you are debugging your test harness
 instead of the thing you meant to test.
 
-| Tag | `FAIL_RATE` | `LATENCY_MS` | For |
-|---|---|---|---|
-| `blue-stable` | 0 | 10ms | the incumbent — what is already running |
-| `green-stable` | 0 | 12ms | a candidate that is fine; promoting it should succeed |
-| `green-flaky` | 0.075 | 55ms | a candidate that is marginal — enough failures to notice, not enough to be sure from a small sample |
-| `green-broken` | 0.35 | 15ms | a candidate that is unambiguously bad |
-| `green-slow` | 0 | 400ms | a candidate that never fails and is simply too slow |
-| `plain`, `latest` | 0 | 0 | configure it yourself |
+| Tag | Also | `FAIL_RATE` | `LATENCY_MS` | For |
+|---|---|---|---|---|
+| `blue-stable` | | 0 | 10ms | the incumbent — what is already running |
+| `green-stable` | `stable` | 0 | 12ms | a candidate that is fine; promoting it should succeed |
+| `green-flaky` | `flaky` | 0.075 | 55ms | a candidate that is marginal — enough failures to notice, not enough to be sure from a small sample |
+| `green-broken` | `broken` | 0.35 | 15ms | a candidate that is unambiguously bad |
+| `green-slow` | `slow` | 0 | 400ms | a candidate that never fails and is simply too slow |
+| `plain` | `latest` | 0 | 0 | configure it yourself |
+
+If blue/green is not your vocabulary, ignore it and use the bare behaviour
+names. They always mean the green build, because green is the candidate and the
+candidate is what a test is usually pointing at; `blue-stable` is the one tag
+that keeps its prefix, since its entire job is being the other one.
 
 `green-slow` is worth having because every other profile degrades by returning
 500s. A latency regression is a different thing to detect — error-rate alarms
@@ -63,11 +68,13 @@ the signal is weak enough that the honest answer is "not enough evidence yet".
 
 ### Pinning
 
-Every profile publishes a moving tag and a pinned one:
+Every tag comes in a moving and a pinned form:
 
 ```
-ghcr.io/temikus/faultline:green-broken        # newest build of that profile
-ghcr.io/temikus/faultline:0.1.0-green-broken  # that version of that profile
+ghcr.io/temikus/faultline:broken              # newest build that behaves this way
+ghcr.io/temikus/faultline:0.1.0-broken        # that version of it
+ghcr.io/temikus/faultline:green-broken        # the same image, named by role too
+ghcr.io/temikus/faultline:0.1.0-green-broken
 ```
 
 The plain build answers to two more, for anyone reaching for the image without
