@@ -44,7 +44,13 @@ instead of the thing you meant to test.
 | `green-stable` | 0 | 12ms | a candidate that is fine; promoting it should succeed |
 | `green-flaky` | 0.075 | 55ms | a candidate that is marginal — enough failures to notice, not enough to be sure from a small sample |
 | `green-broken` | 0.35 | 15ms | a candidate that is unambiguously bad |
-| `latest` | 0 | 0 | configure it yourself |
+| `green-slow` | 0 | 400ms | a candidate that never fails and is simply too slow |
+| `plain`, `latest` | 0 | 0 | configure it yourself |
+
+`green-slow` is worth having because every other profile degrades by returning
+500s. A latency regression is a different thing to detect — error-rate alarms
+never fire, and a system that only watches for failures will promote it
+happily.
 
 Blue and green are the usual deployment roles: blue is what is serving, green is
 what you are considering. Two healthy tags exist because a promotion has to
@@ -57,13 +63,19 @@ the signal is weak enough that the honest answer is "not enough evidence yet".
 
 ### Pinning
 
-Each build publishes three forms:
+Every profile publishes a moving tag and a pinned one:
+
+```
+ghcr.io/temikus/faultline:green-broken        # newest build of that profile
+ghcr.io/temikus/faultline:0.1.0-green-broken  # that version of that profile
+```
+
+The plain build answers to two more, for anyone reaching for the image without
+caring about profiles:
 
 ```
 ghcr.io/temikus/faultline:latest              # newest, configure at run time
-ghcr.io/temikus/faultline:0.1.0               # that version, configure at run time
-ghcr.io/temikus/faultline:green-broken        # newest build of that profile
-ghcr.io/temikus/faultline:0.1.0-green-broken  # that version of that profile
+ghcr.io/temikus/faultline:0.1.0               # same image as 0.1.0-plain
 ```
 
 Point a demo at the moving profile tag. Pin the version-qualified one when a

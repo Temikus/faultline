@@ -57,6 +57,14 @@ jobs:
           - profile: green-broken
             fail_rate: "0.35"
             latency_ms: "15"
+          # A candidate that never fails and is simply too slow. Every other
+          # profile degrades by returning 500s, so without this one there is no
+          # way to test what a system does about a pure latency regression —
+          # which is a different failure to detect and a different one to get
+          # wrong.
+          - profile: green-slow
+            fail_rate: "0.0"
+            latency_ms: "400"
     steps:
       - uses: actions/checkout@v4
 
@@ -85,12 +93,15 @@ jobs:
             *) echo "::error::version must look like 1.2.3, got '$version'"; exit 1 ;;
           esac
 
+          # Every build gets both a moving tag and a pinned one. The plain build
+          # additionally answers to latest and the bare version, because that is
+          # what someone reaching for the image without knowing about profiles
+          # will type.
           {
             echo "TAGS<<TAGS_EOF"
+            printf '%s\n' "$image:$PROFILE" "$image:$version-$PROFILE"
             if [ "$PROFILE" = plain ]; then
               printf '%s\n' "$image:latest" "$image:$version"
-            else
-              printf '%s\n' "$image:$PROFILE" "$image:$version-$PROFILE"
             fi
             echo "TAGS_EOF"
           } >> "$GITHUB_ENV"
