@@ -72,16 +72,20 @@ result has to still mean the same thing a year from now.
 ## Development
 
 ```bash
-just              # list recipes
-just check        # fmt + vet + test + image build
+just                # list recipes
+just check          # lint + tests + image build
 just serve 0.35 15  # run locally, failing a third of requests
-just probe        # hit it 20 times and count the failures
+just probe          # hit it 20 times and count the failures
+just release minor  # tag and push, which publishes every profile
 ```
 
-Publishing is manual: `Actions → publish → Run workflow`, with the version to
-tag. Pushing a `v*` git tag publishes that version too. The images are fixtures,
-so they are deliberately not rebuilt on every commit — a rebuild of `blue-stable`
-while something is mid-test would move the baseline underneath it.
+`just release [patch|minor|major]` bumps the latest tag and pushes it, and the
+push is what triggers a publish. `Actions → publish → Run workflow` does the
+same thing for a version you name.
+
+The images are deliberately not rebuilt on every commit: they are fixtures, and
+a rebuild of `blue-stable` while something is mid-test would move the baseline
+underneath it.
 
 ## Who uses it
 
