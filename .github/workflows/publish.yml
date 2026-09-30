@@ -79,7 +79,7 @@ jobs:
             fail_rate: "0.0"
             latency_ms: "400"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve the image name and its tags
         env:
