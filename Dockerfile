@@ -6,7 +6,7 @@
 # the profile tags, whose behaviour is baked in so the tag alone says what the
 # workload does. See README.md for the profile table.
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod ./
 COPY *.go ./
